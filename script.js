@@ -1,4 +1,4 @@
-// script.js - improved front-end logic with better error handling
+// script.js - Complete front-end logic with all fixes
 document.getElementById('year').textContent = new Date().getFullYear();
 
 // Theme management with localStorage persistence
@@ -7,11 +7,14 @@ const themeManager = {
     const savedTheme = localStorage.getItem('theme') || 'light';
     this.setTheme(savedTheme);
     
-    document.getElementById('themeToggle').addEventListener('click', () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-      this.setTheme(newTheme);
-    });
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        this.setTheme(newTheme);
+      });
+    }
   },
   
   setTheme(theme) {
@@ -20,7 +23,9 @@ const themeManager = {
     
     // Update button text
     const button = document.getElementById('themeToggle');
-    button.textContent = theme === 'light' ? '🌙' : '☀️';
+    if (button) {
+      button.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+    }
   }
 };
 
@@ -47,6 +52,12 @@ const apiClient = {
       return data;
     } catch (error) {
       console.error(`API Error (${endpoint}):`, error);
+      
+      // Handle network errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error - please check your connection');
+      }
+      
       throw error;
     }
   }
@@ -55,52 +66,49 @@ const apiClient = {
 // UI helpers
 const ui = {
   showMessage(message, type = 'info') {
-    // Create or update message element
-    let messageEl = document.getElementById('message');
-    if (!messageEl) {
-      messageEl = document.createElement('div');
-      messageEl.id = 'message';
-      messageEl.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 16px;
-        border-radius: 8px;
-        color: white;
-        font-weight: 600;
-        z-index: 1000;
-        max-width: 300px;
-        transition: all 0.3s ease;
-      `;
-      document.body.appendChild(messageEl);
+    // Remove existing message
+    const existingMessage = document.getElementById('toast-message');
+    if (existingMessage) {
+      existingMessage.remove();
     }
     
-    const colors = {
-      success: '#10b981',
-      error: '#ef4444',
-      info: '#3b82f6'
-    };
-    
-    messageEl.style.backgroundColor = colors[type] || colors.info;
+    // Create new message element
+    const messageEl = document.createElement('div');
+    messageEl.id = 'toast-message';
+    messageEl.className = `toast toast-${type}`;
     messageEl.textContent = message;
-    messageEl.style.opacity = '1';
-    messageEl.style.transform = 'translateY(0)';
     
+    document.body.appendChild(messageEl);
+    
+    // Trigger animation
     setTimeout(() => {
-      messageEl.style.opacity = '0';
-      messageEl.style.transform = 'translateY(-20px)';
+      messageEl.classList.add('toast-show');
+    }, 10);
+    
+    // Auto remove after 4 seconds
+    setTimeout(() => {
+      messageEl.classList.remove('toast-show');
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.remove();
+        }
+      }, 300);
     }, 4000);
   },
   
-  setLoading(elementId, isLoading) {
+  setLoading(elementId, isLoading, originalText = '') {
     const element = document.getElementById(elementId);
     if (!element) return;
     
     if (isLoading) {
       element.disabled = true;
+      element.dataset.originalText = element.textContent;
       element.textContent = 'Loading...';
+      element.classList.add('loading');
     } else {
       element.disabled = false;
+      element.textContent = element.dataset.originalText || originalText;
+      element.classList.remove('loading');
     }
   }
 };
@@ -126,9 +134,15 @@ async function loadData() {
       ],
       services: [
         { title: 'Strategy & Consulting', desc: 'Market-fit, product strategy, and launch plans.' },
-        { title: 'Design Sprints', desc: 'Rapid prototyping with measurable outcomes.' }
+        { title: 'Design Sprints', desc: 'Rapid prototyping with measurable outcomes.' },
+        { title: 'Community Building', desc: 'Member programs, forums, and events.' },
+        { title: 'Courses', desc: 'Skill-based short courses for creators.' }
       ],
-      blog: ['Coming soon...'],
+      blog: [
+        'Designing for a kinder web — 5 practical steps',
+        'Micro-habits that scale — for founders and teams',
+        'Why slow growth wins — the long-game playbook'
+      ],
       about: 'New Yuga stands for intentional progress — a curated space where technology and mindful practices meet.',
       contact: {
         email: 'hello@newyuga.example',
@@ -137,77 +151,95 @@ async function loadData() {
     };
     
     renderData(fallbackData);
-    ui.showMessage('Using offline content. Some features may be limited.', 'info');
+    ui.showMessage('Using offline content. Server may be unavailable.', 'warning');
   }
 }
 
 function renderData(data) {
   // Update hero section
-  document.getElementById('hero-title').textContent = data.hero.title;
-  document.getElementById('hero-desc').textContent = data.hero.subtitle;
+  const heroTitle = document.getElementById('hero-title');
+  const heroDesc = document.getElementById('hero-desc');
+  
+  if (heroTitle) heroTitle.textContent = data.hero.title;
+  if (heroDesc) heroDesc.textContent = data.hero.subtitle;
 
   // Render features
   const featuresContainer = document.getElementById('feature-list');
-  featuresContainer.innerHTML = '';
-  data.features.forEach(feature => {
-    const featureEl = document.createElement('div');
-    featureEl.className = 'feature';
-    featureEl.innerHTML = `
-      <strong>${escapeHtml(feature.title)}</strong>
-      <div class="muted" style="font-size:13px">${escapeHtml(feature.desc)}</div>
-    `;
-    featuresContainer.appendChild(featureEl);
-  });
+  if (featuresContainer && data.features) {
+    featuresContainer.innerHTML = '';
+    data.features.forEach(feature => {
+      const featureEl = document.createElement('div');
+      featureEl.className = 'feature';
+      featureEl.innerHTML = `
+        <strong>${escapeHtml(feature.title)}</strong>
+        <div class="muted" style="font-size:13px">${escapeHtml(feature.desc)}</div>
+      `;
+      featuresContainer.appendChild(featureEl);
+    });
+  }
 
   // Render services
   const servicesContainer = document.getElementById('services-grid');
-  servicesContainer.innerHTML = '';
-  data.services.forEach(service => {
-    const serviceEl = document.createElement('div');
-    serviceEl.className = 'feature';
-    serviceEl.innerHTML = `
-      <strong>${escapeHtml(service.title)}</strong>
-      <div class="muted" style="font-size:13px">${escapeHtml(service.desc)}</div>
-    `;
-    servicesContainer.appendChild(serviceEl);
-  });
+  if (servicesContainer && data.services) {
+    servicesContainer.innerHTML = '';
+    data.services.forEach(service => {
+      const serviceEl = document.createElement('div');
+      serviceEl.className = 'feature';
+      serviceEl.innerHTML = `
+        <strong>${escapeHtml(service.title)}</strong>
+        <div class="muted" style="font-size:13px">${escapeHtml(service.desc)}</div>
+      `;
+      servicesContainer.appendChild(serviceEl);
+    });
+  }
 
   // Render blog posts
   const blogContainer = document.getElementById('blog-list');
-  blogContainer.innerHTML = '';
-  data.blog.forEach(post => {
-    const listItem = document.createElement('li');
-    listItem.textContent = post;
-    blogContainer.appendChild(listItem);
-  });
+  if (blogContainer && data.blog) {
+    blogContainer.innerHTML = '';
+    data.blog.forEach(post => {
+      const listItem = document.createElement('li');
+      listItem.textContent = post;
+      blogContainer.appendChild(listItem);
+    });
+  }
 
   // Update about and contact sections
-  document.getElementById('about-text').textContent = data.about;
-  document.getElementById('contact-info').innerHTML = `
-    Email: <a href="mailto:${escapeHtml(data.contact.email)}">${escapeHtml(data.contact.email)}</a> — 
-    Social: ${escapeHtml(data.contact.social)}
-  `;
+  const aboutText = document.getElementById('about-text');
+  const contactInfo = document.getElementById('contact-info');
+  
+  if (aboutText) aboutText.textContent = data.about;
+  if (contactInfo && data.contact) {
+    contactInfo.innerHTML = `
+      Email: <a href="mailto:${escapeHtml(data.contact.email)}">${escapeHtml(data.contact.email)}</a> — 
+      Social: ${escapeHtml(data.contact.social)}
+    `;
+  }
 }
 
 // Newsletter subscription with API integration
 async function handleSubscription() {
   const emailInput = document.getElementById('email');
   const subscribeBtn = document.getElementById('subscribe');
+  
+  if (!emailInput || !subscribeBtn) return;
+  
   const email = emailInput.value.trim();
   
   if (!email) {
     ui.showMessage('Please enter an email address', 'error');
+    emailInput.focus();
     return;
   }
   
   if (!validateEmail(email)) {
     ui.showMessage('Please enter a valid email address', 'error');
+    emailInput.focus();
     return;
   }
   
   try {
     ui.setLoading('subscribe', true);
-    subscribeBtn.textContent = 'Subscribing...';
     
     await apiClient.request('/subscribe', {
       method: 'POST',
@@ -219,8 +251,7 @@ async function handleSubscription() {
   } catch (error) {
     ui.showMessage(error.message || 'Failed to subscribe', 'error');
   } finally {
-    subscribeBtn.disabled = false;
-    subscribeBtn.textContent = 'Subscribe';
+    ui.setLoading('subscribe', false, 'Subscribe');
   }
 }
 
@@ -231,9 +262,9 @@ async function handleContactForm(event) {
   const form = event.target;
   const formData = new FormData(form);
   const data = {
-    name: formData.get('name').trim(),
-    email: formData.get('email').trim(),
-    message: formData.get('message').trim()
+    name: formData.get('name')?.trim() || '',
+    email: formData.get('email')?.trim() || '',
+    message: formData.get('message')?.trim() || ''
   };
   
   // Client-side validation
@@ -259,8 +290,10 @@ async function handleContactForm(event) {
   
   try {
     const submitBtn = form.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Sending...';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+    }
     
     await apiClient.request('/contact', {
       method: 'POST',
@@ -273,8 +306,10 @@ async function handleContactForm(event) {
     ui.showMessage(error.message || 'Failed to send message', 'error');
   } finally {
     const submitBtn = form.querySelector('button[type="submit"]');
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Send message';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send message';
+    }
   }
 }
 
@@ -286,19 +321,45 @@ function validateEmail(email) {
 
 // XSS protection helper
 function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
 
-// Event listeners
-document.getElementById('subscribe').addEventListener('click', handleSubscription);
-document.getElementById('contactForm').addEventListener('submit', handleContactForm);
-
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('🚀 New Yuga app initializing...');
+  
+  // Initialize theme manager
   themeManager.init();
+  
+  // Load data from API
   loadData();
+  
+  // Set up event listeners
+  const subscribeBtn = document.getElementById('subscribe');
+  const contactForm = document.getElementById('contactForm');
+  
+  if (subscribeBtn) {
+    subscribeBtn.addEventListener('click', handleSubscription);
+  }
+  
+  if (contactForm) {
+    contactForm.addEventListener('submit', handleContactForm);
+  }
+  
+  // Handle Enter key in email input
+  const emailInput = document.getElementById('email');
+  if (emailInput) {
+    emailInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleSubscription();
+      }
+    });
+  }
+  
+  console.log('✅ New Yuga app initialized successfully');
 });
 
 // Handle online/offline status
@@ -308,5 +369,20 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('offline', () => {
-  ui.showMessage('You are offline. Some features may not work.', 'info');
+  ui.showMessage('You are offline. Some features may not work.', 'warning');
+});
+
+// Handle page visibility for better UX
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    // Page became visible, refresh data if needed
+    const lastLoad = localStorage.getItem('lastDataLoad');
+    const now = Date.now();
+    
+    // Refresh data if it's been more than 5 minutes
+    if (!lastLoad || (now - parseInt(lastLoad)) > 5 * 60 * 1000) {
+      loadData();
+      localStorage.setItem('lastDataLoad', now.toString());
+    }
+  }
 });
