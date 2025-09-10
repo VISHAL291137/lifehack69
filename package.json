@@ -4,10 +4,24 @@
   "description": "New Yuga single page API + front-end demo",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "new-yuga",
+    "express",
+    "api",
+    "frontend"
+  ],
+  "author": "New Yuga Team",
+  "license": "MIT"
   }
 }
